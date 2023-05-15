@@ -1,4 +1,4 @@
-from metaflow import FlowSpec, step, card, conda_base, current, Parameter, Flow, trigger
+from metaflow import FlowSpec, step, card, conda_base, current, Parameter, Flow, trigger, catch, retry
 from metaflow.cards import Markdown, Table, Image, Artifact
 
 URL = "https://outerbounds-datasets.s3.us-west-2.amazonaws.com/taxi/latest.parquet"
@@ -11,28 +11,23 @@ class TaxiFarePrediction(FlowSpec):
     data_url = Parameter("data_url", default=URL)
 
     def transform_features(self, df):
+        obviously_bad_data_filters = [
 
+                df.total_amount > 0,         # fare_amount in US Dollars
+                df.trip_distance <= 100,    # trip_distance in miles
+                df.trip_distance > 0
+            ]
+        for f in obviously_bad_data_filters:
+            df = df[f]
         # TODO: 
             # Try to complete tasks 2 and 3 with this function doing nothing like it currently is.
             # Understand what is happening.
             # Revisit task 1 and think about what might go in this function.
-
-        obviously_bad_data_filters = [
-
-            df.fare_amount > 0,         # fare_amount in US Dollars
-            df.trip_distance <= 100,    # trip_distance in miles
-            df.trip_distance > 0
-
-            # TODO: add some logic to filter out what you decide is bad data!
-            # TIP: Don't spend too much time on this step for this project though, it practice it is a never-ending process.
-
-        ]
-
-        for f in obviously_bad_data_filters:
-            df = df[f]
             
         return df
 
+    @catch(var="data_read")
+    @retry
     @step
     def start(self):
 
@@ -55,6 +50,7 @@ class TaxiFarePrediction(FlowSpec):
 
         # TODO: Play around with the model if you are feeling it.
         self.model = LinearRegression()
+        self.model.fit(self.X, self.y)
 
         self.next(self.validate)
 
